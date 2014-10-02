@@ -29,13 +29,14 @@ for i = 1:L
     end
 end
 
-logical_operators = zeros(Bool, (2, 2*L, L, 2))
-LO = reshape(logical_operators, (2, 2*2*L*L))
+logical_operators = zeros(Bool, (4, 2*L, L, 2))
+LO = reshape(logical_operators, (4, 2*2*L*L))
 
 for i = 1:L
     logical_operators[1, 1, i, 2] = 1
     logical_operators[2, 2*i, 1, 1] = 1
-    #logical_operators[2, 2*i, 1] = 1
+    logical_operators[3, 1, i, 1] = 1
+    logical_operators[4, 2*i, 1, 2] = 1
 end
 
 error = zeros(Uint, 2*L, L, 2)
@@ -46,7 +47,7 @@ V = S * circshift(E, (2*L*L,)) % 2
 
 result = reshape(V, (L, L, 2))
 
-for n = 1:100
+for n = 1:72
     i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
     error[i, j, 1] += 1
     #error[:] = error % 2
@@ -56,6 +57,8 @@ for n = 1:100
     #println(result)
     #sleep(0.5)
 end
+
+println(int(error[:,:,1]))
 
 V[:] = S * circshift(E, (2*L*L,)) % 2
 println(result[:,:,1])
@@ -120,7 +123,7 @@ for k in syndrome_list
     end
 end
 
-println(int(error))
+println(int(error[:,:,1]))
 
 #error[:] = error % 2
 V[:] = S * circshift(E, (2*L*L,)) % 2
