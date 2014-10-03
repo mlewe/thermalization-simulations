@@ -44,6 +44,10 @@ for i = 1:L
     logical_operators[4, 2*i, 1, 2] = 1
 end
 
+results = {}
+
+for τ = 0.01:0.01:0.3
+
 fail = 0
 tries = 10000
 
@@ -52,7 +56,7 @@ for n = 1:tries
     # clear previous try
     fill!(error, 0)
 
-    for n = 1:int(0.1*2*L*L)
+    for n = 1:int(τ*2*L*L)
         i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
         error[i, j, 1] += 1
         #error[:] = error % 2
@@ -145,4 +149,8 @@ for n = 1:tries
 end
 
 println("fail probability: ", fail/tries)
+push!(results, fail/tries)
 
+end
+
+println(results)
