@@ -1,4 +1,5 @@
 using BlossomV
+using DataFrames
 
 const L = 5
 
@@ -58,7 +59,7 @@ for n = 1:tries
     # clear previous try
     fill!(error, 0)
 
-    for n = stepsize:stepsize:T*stepsize
+    for n = 1:T*stepsize
         i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
         error[i, j, 1] += 1
         #error[:] = error % 2
@@ -158,3 +159,16 @@ end
 τ = 2*L*L
 println(stepsize/τ:stepsize/τ:30*stepsize/τ)
 println(results)
+
+df_new = DataFrame(time=stepsize/τ:stepsize/τ:30*stepsize/τ,
+                    probability=results, L=L)
+df = []
+
+try
+    df_old = readtable("out.csv")
+    df = [df_old, df_new]
+catch
+    df = df_new
+end
+
+writetable("out.csv", df)
