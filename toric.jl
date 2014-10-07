@@ -2,6 +2,8 @@ using BlossomV
 using DataFrames
 
 const L = 5
+const tries = 10000
+filename = "data_L$L.csv"
 
 function manhattan_distance(i, j)
     x = min(abs(i[1]-j[1]), (abs(i[1]-j[1])+L) % L)
@@ -47,12 +49,14 @@ end
 
 results = {}
 
-stepsize = ceil(0.01*2*L*L)
+stepsize = ceil(0.005*2*L*L)
+τ = 2*L*L
 
-for T = 1:30
+T_max = min(30, ceil(0.15/(stepsize/τ)))
+
+for T = 1:T_max
 
 fail = 0
-tries = 10000
 
 for n = 1:tries
 
@@ -156,19 +160,18 @@ push!(results, fail/tries)
 
 end
 
-τ = 2*L*L
-println(stepsize/τ:stepsize/τ:30*stepsize/τ)
+println(stepsize/τ:stepsize/τ:T_max*stepsize/τ)
 println(results)
 
-df_new = DataFrame(time=stepsize/τ:stepsize/τ:30*stepsize/τ,
+df_new = DataFrame(time=stepsize/τ:stepsize/τ:T_max*stepsize/τ,
                     probability=results, L=L)
 df = []
 
 try
-    df_old = readtable("out.csv")
+    df_old = readtable(filename)
     df = [df_old, df_new]
 catch
     df = df_new
 end
 
-writetable("out.csv", df)
+writetable(filename, df)
