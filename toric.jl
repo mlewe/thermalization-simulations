@@ -13,6 +13,22 @@ else
 end
 filename = "data_L$L.csv"
 
+abstract Code
+
+type ToricCode <: Code
+    L::Int64
+    S::Matrix{Uint8}
+    LO::Matrix{Uint8}
+    E::Vector{Uint8}
+    V::Vector{Uint8}
+end
+
+ToricCode(L::Integer) = ToricCode(L,
+    zeros(Uint8, (2*L*L, 2*2*L*L)),
+    zeros(Uint8, (4, 2*2*L*L)),
+    zeros(Uint8, (2*2*L*L,)),
+    zeros(Uint8, (2*L*L)))
+
 function torus_distance(l)
     min(l, L-l)
 end
@@ -23,40 +39,58 @@ function manhattan_distance(i, j)
     x + y
 end
 
-stabilizers = zeros(Bool, (L, L, 2, 2*L, L, 2))
-S = reshape(stabilizers, (2*L*L, 2*2*L*L))
-
-logical_operators = zeros(Bool, (4, 2*L, L, 2))
-LO = reshape(logical_operators, (4, 2*2*L*L))
-
-error = zeros(Uint8, 2*L, L, 2)
-E = reshape(error, (2*2*L*L,))
-
-V = zeros(Uint8, 2*L*L)
-#V = S * SF * E % 2
-#V = S * circshift(E, (2*L*L,)) % 2
-result = reshape(V, (L, L, 2))
-
-for i = 1:L
-    for j = 1:L
-        # plaquettes
-        stabilizers[i, j, 1, 2*i, j, 2] = 1
-        stabilizers[i, j, 1, 2*i-1, j, 2] = 1
-        stabilizers[i, j, 1, 2*i, (j % L)+1, 2] = 1
-        stabilizers[i, j, 1, ((2*i) % (2*L))+1, j, 2] = 1
-        # stars
-        stabilizers[i, j, 2, (2*i%(2*L))+1, j, 1] = 1
-        stabilizers[i, j, 2, 2*i, j%L+1, 1] = 1
-        stabilizers[i, j, 2, (2*i%(2*L))+1, j%L+1, 1] = 1
-        stabilizers[i, j, 2, ((2*i+1)%(2*L))+1, j%L+1, 1] = 1
-    end
+function update!(T::ToricCode)
+    L = T.L
+    T.V[:] = T.S * circshift(T.E, (2*L*L,)) % 2
+    nothing
 end
 
-for i = 1:L
-    logical_operators[1, 1, i, 2] = 1
-    logical_operators[2, 2*i, 1, 1] = 1
-    logical_operators[3, 1, i, 1] = 1
-    logical_operators[4, 2*i, 1, 2] = 1
+function clear!(T::ToricCode)
+    fill!(T.E, 0)
+    nothing
+end
+
+function apply_random_error!(T::ToricCode)
+    T.E[rand(1:end)] += 1
+    nothing
+end
+
+function initialize_stabilizers!(T::ToricCode)
+
+    L = T.L
+    stabilizers = reshape(T.S, (L, L, 2, 2*L, L, 2))
+
+    for i = 1:L
+        for j = 1:L
+            # plaquettes
+            stabilizers[i, j, 1, 2*i, j, 2] = 1
+            stabilizers[i, j, 1, 2*i-1, j, 2] = 1
+            stabilizers[i, j, 1, 2*i, (j % L)+1, 2] = 1
+            stabilizers[i, j, 1, ((2*i) % (2*L))+1, j, 2] = 1
+            # stars
+            stabilizers[i, j, 2, (2*i%(2*L))+1, j, 1] = 1
+            stabilizers[i, j, 2, 2*i, j%L+1, 1] = 1
+            stabilizers[i, j, 2, (2*i%(2*L))+1, j%L+1, 1] = 1
+            stabilizers[i, j, 2, ((2*i+1)%(2*L))+1, j%L+1, 1] = 1
+        end
+    end
+
+    nothing
+end
+
+function initialize_logical_operators!(T::ToricCode)
+
+    L = T.L
+    logical_operators = reshape(T.LO, (4, 2*L, L, 2))
+
+    for i = 1:L
+        logical_operators[1, 1, i, 2] = 1
+        logical_operators[2, 2*i, 1, 1] = 1
+        logical_operators[3, 1, i, 1] = 1
+        logical_operators[4, 2*i, 1, 2] = 1
+    end
+
+    nothing
 end
 
 function correct_x_errors!(syn, err)
@@ -205,76 +239,73 @@ function apply_y_error!(err, x1, y1, x2, y2)
     nothing
 end
 
+code = ToricCode(L)
+initialize_stabilizers!(code)
+initialize_logical_operators!(code)
 
 results = {}
 
 stepsize = ceil(0.005*2*L*L)
 τ = 2*L*L
 
-T_max = min(30, ceil(0.15/(stepsize/τ)))
+function run_simulation(code::ToricCode, T::Integer)
+    fail = 0
+    for n = 1:tries
+        if T == 0
+            continue
+        end
 
-for T = 0:T_max
+        # clear previous try
+        clear!(code)
 
-fail = 0
+        for n = 1:T*stepsize
+            apply_random_error!(code)
+        end
 
-for n = 1:tries
-    if T == 0
-        continue
+        update!(code)
+        result = reshape(code.V, (L, L, 2))
+        error = reshape(code.E, (2*L, L, 2))
+
+        sy = findn(result[:,:,1])
+        correct_x_errors!(sy, error)
+
+        sy = findn(result[:,:,2])
+        correct_y_errors!(sy, error)
+
+        update!(code)
+
+        if findnz(result[:,:,1])[1] != []
+            println(int(result[:,:,1]))
+            println("error in correction procedure")
+            println("error correcting x errors")
+        end
+
+        if findnz(result[:,:,2])[1] != []
+            println(int(result[:,:,2]))
+            println("error in correction procedure")
+            println("error correcting y errors")
+        end
+
+        logical_error = code.LO * circshift(code.E, (2*L*L,)) % 2
+
+        #println(logical_error)
+
+        if findn(logical_error)[1] != []
+            fail = fail + 1
+            println("error correction failed")
+        else
+            println("error correction successful")
+        end
     end
 
-    # clear previous try
-    fill!(error, 0)
-
-    for n = 1:T*stepsize
-        i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
-        error[i, j, 1] += 1
-        i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
-        error[i, j, 2] += 1
-    end
-
-    # println(int(error[:,:,1]))
-
-    V[:] = S * circshift(E, (2*L*L,)) % 2
-    # println(int(result[:,:,1]))
-
-    sy = findn(result[:,:,1])
-    correct_x_errors!(sy, error)
-
-    sy = findn(result[:,:,2])
-    correct_y_errors!(sy, error)
-
-    # println(int(error[:,:,1]))
-
-    #error[:] = error % 2
-    V[:] = S * circshift(E, (2*L*L,)) % 2
-
-    if findnz(result[:,:,1])[1] != []
-        println(int(result[:,:,1]))
-        println("error in correction procedure")
-        println("error correcting x errors")
-    end
-
-    if findnz(result[:,:,2])[1] != []
-        println(int(result[:,:,2]))
-        println("error in correction procedure")
-        println("error correcting y errors")
-    end
-
-    logical_error = LO * circshift(E, (2*L*L,)) % 2
-
-    println(logical_error)
-
-    if findn(logical_error)[1] != []
-        fail = fail + 1
-        println("error correction failed")
-    else
-        println("error correction successful")
-    end
+    println("fail probability: ", fail/tries)
+    fail/tries
 end
 
-println("fail probability: ", fail/tries)
-push!(results, fail/tries)
+T_max = min(30, int(ceil(0.15/(stepsize/τ))))
 
+for T = 0:T_max
+    push!(results, run_simulation(code, T))
 end
 
 println(0:stepsize/τ:T_max*stepsize/τ)
