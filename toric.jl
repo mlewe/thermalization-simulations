@@ -59,47 +59,16 @@ for i = 1:L
     logical_operators[4, 2*i, 1, 2] = 1
 end
 
-results = {}
-
-stepsize = ceil(0.005*2*L*L)
-τ = 2*L*L
-
-T_max = min(30, ceil(0.15/(stepsize/τ)))
-
-for T = 0:T_max
-
-fail = 0
-
-for n = 1:tries
-
-    # clear previous try
-    fill!(error, 0)
-
-    for n = 1:T*stepsize
-        i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
-        error[i, j, 1] += 1
-        #error[:] = error % 2
-        #V[:] = S * circshift(E, (2*L*L,)) % 2
-        #run(`clear`)
-        #println("error at ($i, $j):")
-        #println(result)
-        #sleep(0.5)
-    end
-
-    # println(int(error[:,:,1]))
-
-    V[:] = S * circshift(E, (2*L*L,)) % 2
-    # println(int(result[:,:,1]))
-
-    sy = apply((x,y,_)->[x y], findnz(result[:,:,1]))
-    # print(sy[1,:])
-
-    n = size(sy)[1]
+function correct_x_errors!(syn, err)
+    syn_x, syn_y = syn
+    n = length(syn_x)
 
     m = Matching(int32(n), int32(n*(n-1)/2))
 
     function distance(k, l)
-        manhattan_distance(sy[k,:], sy[l,:])
+        manhattan_distance(
+            (syn_x[k], syn_y[k]),
+            (syn_y[l], syn_y[l]))
     end
 
     for k = 1:n-1
@@ -112,38 +81,167 @@ for n = 1:tries
 
     syndrome_list = IntSet(1:n)
     for k in syndrome_list
-        #print(sy[k,:])
+        #print(syn[k,:])
         #print(" matches to ")
         l = get_match(m, int32(k-1))+1
-        #println(sy[l,:])
+        #println(syn[l,:])
         pop!(syndrome_list, l)
-        j = sy[k,2]
-        if (abs(sy[k,1]-sy[l,1]) <= int(floor(L/2)))
-            for i = min(sy[k,1],sy[l,1]):max(sy[k,1],sy[l,1])-1
-                error[(2*i)+1, j, 1] += 1
-            end
-        else
-            for i = 1:min(sy[k,1],sy[l,1])
-                error[(2*i)-1, j, 1] += 1
-            end
-            for i = max(sy[k,1],sy[l,1]):L-1
-                error[(2*i)+1, j, 1] += 1
-            end
+        apply_x_error!(err, syn_x[k], syn_y[k], syn_x[l], syn_y[l])
+    end
+    nothing
+end
+
+function apply_x_error!(err, x1, y1, x2, y2)
+
+    I, J = x1, y2
+
+    if x1 > x2
+        x1, x2 = x2, x1
+    end
+
+    if y1 > y2
+        y1, y2 = y2, y1
+    end
+
+    if (abs(x1-x2) <= int(floor(L/2)))
+        for i = x1:x2-1
+            err[(2*i)+1, J, 1] += 1
         end
-        i = sy[l,1]
-        if (abs(sy[k,2]-sy[l,2]) <= int(floor(L/2)))
-            for j = min(sy[k,2],sy[l,2])+1:max(sy[k,2],sy[l,2])
-                error[2*i, j, 1] += 1
-            end
-        else
-            for j = 1:min(sy[k,2],sy[l,2])
-                error[2*i, j, 1] += 1
-            end
-            for j = max(sy[k,2],sy[l,2])+1:L
-                error[2*i, j, 1] += 1
-            end
+    else
+        for i = 1:x1
+            err[(2*i)-1, J, 1] += 1
+        end
+        for i = x2:L-1
+            err[(2*i)+1, J, 1] += 1
         end
     end
+
+    if (abs(y1-y2) <= int(floor(L/2)))
+        for j = y1+1:y2
+            err[2*I, j, 1] += 1
+        end
+    else
+        for j = 1:y1
+            err[2*I, j, 1] += 1
+        end
+        for j = y2+1:L
+            err[2*I, j, 1] += 1
+        end
+    end
+
+    nothing
+end
+
+function correct_y_errors!(syn, err)
+    syn_x, syn_y = syn
+    n = length(syn_x)
+
+    m = Matching(int32(n), int32(n*(n-1)/2))
+
+    function distance(k, l)
+        manhattan_distance(
+            (syn_x[k], syn_y[k]),
+            (syn_y[l], syn_y[l]))
+    end
+
+    for k = 1:n-1
+        for l = k+1:n
+            add_edge(m, int32(k-1), int32(l-1), int32(distance(k, l)))
+        end
+    end
+
+    solve(m)
+
+    syndrome_list = IntSet(1:n)
+    for k in syndrome_list
+        #print(syn[k,:])
+        #print(" matches to ")
+        l = get_match(m, int32(k-1))+1
+        #println(syn[l,:])
+        pop!(syndrome_list, l)
+        apply_y_error!(err, syn_x[k], syn_y[k], syn_x[l], syn_y[l])
+    end
+    nothing
+end
+
+function apply_y_error!(err, x1, y1, x2, y2)
+
+    I, J = x1, y2
+
+    if x1 > x2
+        x1, x2 = x2, x1
+    end
+
+    if y1 > y2
+        y1, y2 = y2, y1
+    end
+
+    if (abs(x1-x2) <= int(floor(L/2)))
+        for i = x1:x2-1
+            err[(2*i)+2, J%L+1, 2] += 1
+        end
+    else
+        for i = 1:x1
+            err[(2*i), J%L+1, 2] += 1
+        end
+        for i = x2:L-1
+            err[(2*i)+2, J%L+1, 2] += 1
+        end
+    end
+
+    if (abs(y1-y2) <= int(floor(L/2)))
+        for j = y1+1:y2
+            err[rem1(2*I+1, 2*L), j, 2] += 1
+        end
+    else
+        for j = 1:y1
+            err[rem1(2*I+1, 2*L), j, 2] += 1
+        end
+        for j = y2+1:L
+            err[rem1(2*I+1, 2*L), j, 2] += 1
+        end
+    end
+
+    nothing
+end
+
+
+results = {}
+
+stepsize = ceil(0.005*2*L*L)
+τ = 2*L*L
+
+T_max = min(30, ceil(0.15/(stepsize/τ)))
+
+for T = 0:T_max
+
+fail = 0
+
+for n = 1:tries
+    if T == 0
+        continue
+    end
+
+    # clear previous try
+    fill!(error, 0)
+
+    for n = 1:T*stepsize
+        i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
+        error[i, j, 1] += 1
+        i, j = rand(Uint)%(2*L)+1, rand(Uint)%L+1
+        error[i, j, 2] += 1
+    end
+
+    # println(int(error[:,:,1]))
+
+    V[:] = S * circshift(E, (2*L*L,)) % 2
+    # println(int(result[:,:,1]))
+
+    sy = findn(result[:,:,1])
+    correct_x_errors!(sy, error)
+
+    sy = findn(result[:,:,2])
+    correct_y_errors!(sy, error)
 
     # println(int(error[:,:,1]))
 
@@ -153,6 +251,13 @@ for n = 1:tries
     if findnz(result[:,:,1])[1] != []
         println(int(result[:,:,1]))
         println("error in correction procedure")
+        println("error correcting x errors")
+    end
+
+    if findnz(result[:,:,2])[1] != []
+        println(int(result[:,:,2]))
+        println("error in correction procedure")
+        println("error correcting y errors")
     end
 
     logical_error = LO * circshift(E, (2*L*L,)) % 2
