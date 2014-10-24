@@ -80,21 +80,19 @@ function initialize_logical_operators!(T::ToricCode)
     nothing
 end
 
-function correct_x_errors!(syn, err)
-    syn_x, syn_y = syn
+function correct_x_errors!(code::ToricCode)
+    L = code.L
+    result = reshape(code.V, (L, L, 2))
+    syn_x, syn_y = findn(result[:,:,1])
     n = length(syn_x)
 
     m = Matching(int32(n), int32(n*(n-1)/2))
 
-    function distance(k, l)
-        manhattan_distance(
-            (syn_x[k], syn_y[k]),
-            (syn_y[l], syn_y[l]), L)
-    end
-
     for k = 1:n-1
         for l = k+1:n
-            add_edge(m, int32(k-1), int32(l-1), int32(distance(k, l)))
+            add_edge(m, int32(k-1), int32(l-1),
+                int32(manhattan_distance(
+                    (syn_x[k], syn_y[k]), (syn_y[l], syn_y[l]), L)))
         end
     end
 
@@ -107,12 +105,44 @@ function correct_x_errors!(syn, err)
         l = get_match(m, int32(k-1))+1
         #println(syn[l,:])
         pop!(syndrome_list, l)
-        apply_x_error!(err, syn_x[k], syn_y[k], syn_x[l], syn_y[l])
+        apply_x_error!(code, syn_x[k], syn_y[k], syn_x[l], syn_y[l])
     end
     nothing
 end
 
-function apply_x_error!(err, x1, y1, x2, y2)
+function correct_y_errors!(code::ToricCode)
+    L = code.L
+    result = reshape(code.V, (L, L, 2))
+    syn_x, syn_y = findn(result[:,:,2])
+    n = length(syn_x)
+
+    m = Matching(int32(n), int32(n*(n-1)/2))
+
+    for k = 1:n-1
+        for l = k+1:n
+            add_edge(m, int32(k-1), int32(l-1),
+                int32(manhattan_distance(
+                    (syn_x[k], syn_y[k]), (syn_y[l], syn_y[l]), L)))
+        end
+    end
+
+    solve(m)
+
+    syndrome_list = IntSet(1:n)
+    for k in syndrome_list
+        #print(syn[k,:])
+        #print(" matches to ")
+        l = get_match(m, int32(k-1))+1
+        #println(syn[l,:])
+        pop!(syndrome_list, l)
+        apply_y_error!(code, syn_x[k], syn_y[k], syn_x[l], syn_y[l])
+    end
+    nothing
+end
+
+function apply_x_error!(code::ToricCode, x1, y1, x2, y2)
+    L = code.L
+    error = reshape(code.E, (2*L, L, 2))
 
     I, J = x1, y2
 
@@ -126,66 +156,36 @@ function apply_x_error!(err, x1, y1, x2, y2)
 
     if (abs(x1-x2) <= ifloor(L/2))
         for i = x1:x2-1
-            err[(2*i)+1, J, 1] += 1
+            error[(2*i)+1, J, 1] += 1
         end
     else
         for i = 1:x1
-            err[(2*i)-1, J, 1] += 1
+            error[(2*i)-1, J, 1] += 1
         end
         for i = x2:L-1
-            err[(2*i)+1, J, 1] += 1
+            error[(2*i)+1, J, 1] += 1
         end
     end
 
     if (abs(y1-y2) <= ifloor(L/2))
         for j = y1+1:y2
-            err[2*I, j, 1] += 1
+            error[2*I, j, 1] += 1
         end
     else
         for j = 1:y1
-            err[2*I, j, 1] += 1
+            error[2*I, j, 1] += 1
         end
         for j = y2+1:L
-            err[2*I, j, 1] += 1
+            error[2*I, j, 1] += 1
         end
     end
 
     nothing
 end
 
-function correct_y_errors!(syn, err)
-    syn_x, syn_y = syn
-    n = length(syn_x)
-
-    m = Matching(int32(n), int32(n*(n-1)/2))
-
-    function distance(k, l)
-        manhattan_distance(
-            (syn_x[k], syn_y[k]),
-            (syn_y[l], syn_y[l]), L)
-    end
-
-    for k = 1:n-1
-        for l = k+1:n
-            add_edge(m, int32(k-1), int32(l-1), int32(distance(k, l)))
-        end
-    end
-
-    solve(m)
-
-    syndrome_list = IntSet(1:n)
-    for k in syndrome_list
-        #print(syn[k,:])
-        #print(" matches to ")
-        l = get_match(m, int32(k-1))+1
-        #println(syn[l,:])
-        pop!(syndrome_list, l)
-        apply_y_error!(err, syn_x[k], syn_y[k], syn_x[l], syn_y[l])
-    end
-    nothing
-end
-
-function apply_y_error!(err, x1, y1, x2, y2)
+function apply_y_error!(code::ToricCode, x1, y1, x2, y2)
+    L = code.L
+    error = reshape(code.E, (2*L, L, 2))
 
     I, J = x1, y2
 
@@ -199,27 +199,27 @@ function apply_y_error!(err, x1, y1, x2, y2)
 
     if (abs(x1-x2) <= ifloor(L/2))
         for i = x1:x2-1
-            err[(2*i)+2, J%L+1, 2] += 1
+            error[(2*i)+2, J%L+1, 2] += 1
         end
     else
         for i = 1:x1
-            err[(2*i), J%L+1, 2] += 1
+            error[(2*i), J%L+1, 2] += 1
         end
         for i = x2:L-1
-            err[(2*i)+2, J%L+1, 2] += 1
+            error[(2*i)+2, J%L+1, 2] += 1
         end
     end
 
     if (abs(y1-y2) <= ifloor(L/2))
         for j = y1+1:y2
-            err[rem1(2*I+1, 2*L), j, 2] += 1
+            error[rem1(2*I+1, 2*L), j, 2] += 1
         end
     else
         for j = 1:y1
-            err[rem1(2*I+1, 2*L), j, 2] += 1
+            error[rem1(2*I+1, 2*L), j, 2] += 1
         end
         for j = y2+1:L
-            err[rem1(2*I+1, 2*L), j, 2] += 1
+            error[rem1(2*I+1, 2*L), j, 2] += 1
         end
     end
 
@@ -236,6 +236,7 @@ function run_simulation!(code::ToricCode, T::Integer, tries::Integer)
 
     L = code.L
     fail = 0
+    result = reshape(code.V, (L, L, 2))
 
     for n = 1:tries
         if T == 0
@@ -250,15 +251,8 @@ function run_simulation!(code::ToricCode, T::Integer, tries::Integer)
         end
 
         update!(code)
-        result = reshape(code.V, (L, L, 2))
-        error = reshape(code.E, (2*L, L, 2))
-
-        sy = findn(result[:,:,1])
-        correct_x_errors!(sy, error)
-
-        sy = findn(result[:,:,2])
-        correct_y_errors!(sy, error)
-
+        correct_x_errors!(code)
+        correct_y_errors!(code)
         update!(code)
 
         if findnz(result[:,:,1])[1] != []
