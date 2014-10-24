@@ -1,17 +1,4 @@
 using BlossomV
-using DataFrames
-
-if length(ARGS) > 0
-    const L = int(ARGS[1])
-else
-    const L = 10
-end
-if length(ARGS) > 1
-    const tries = int(ARGS[2])
-else
-    const tries = 1000
-end
-filename = "data_L$L.csv"
 
 abstract Code
 
@@ -29,13 +16,13 @@ ToricCode(L::Integer) = ToricCode(L,
     zeros(Uint8, (2*2*L*L,)),
     zeros(Uint8, (2*L*L)))
 
-function torus_distance(l)
+function torus_distance(l, L)
     min(l, L-l)
 end
 
-function manhattan_distance(i, j)
-    x = torus_distance(abs(i[1]-j[1]))
-    y = torus_distance(abs(i[2]-j[2]))
+function manhattan_distance(i, j, L)
+    x = torus_distance(abs(i[1]-j[1]), L)
+    y = torus_distance(abs(i[2]-j[2]), L)
     x + y
 end
 
@@ -102,7 +89,7 @@ function correct_x_errors!(syn, err)
     function distance(k, l)
         manhattan_distance(
             (syn_x[k], syn_y[k]),
-            (syn_y[l], syn_y[l]))
+            (syn_y[l], syn_y[l]), L)
     end
 
     for k = 1:n-1
@@ -137,7 +124,7 @@ function apply_x_error!(err, x1, y1, x2, y2)
         y1, y2 = y2, y1
     end
 
-    if (abs(x1-x2) <= int(floor(L/2)))
+    if (abs(x1-x2) <= ifloor(L/2))
         for i = x1:x2-1
             err[(2*i)+1, J, 1] += 1
         end
@@ -150,7 +137,7 @@ function apply_x_error!(err, x1, y1, x2, y2)
         end
     end
 
-    if (abs(y1-y2) <= int(floor(L/2)))
+    if (abs(y1-y2) <= ifloor(L/2))
         for j = y1+1:y2
             err[2*I, j, 1] += 1
         end
@@ -175,7 +162,7 @@ function correct_y_errors!(syn, err)
     function distance(k, l)
         manhattan_distance(
             (syn_x[k], syn_y[k]),
-            (syn_y[l], syn_y[l]))
+            (syn_y[l], syn_y[l]), L)
     end
 
     for k = 1:n-1
@@ -210,7 +197,7 @@ function apply_y_error!(err, x1, y1, x2, y2)
         y1, y2 = y2, y1
     end
 
-    if (abs(x1-x2) <= int(floor(L/2)))
+    if (abs(x1-x2) <= ifloor(L/2))
         for i = x1:x2-1
             err[(2*i)+2, J%L+1, 2] += 1
         end
@@ -223,7 +210,7 @@ function apply_y_error!(err, x1, y1, x2, y2)
         end
     end
 
-    if (abs(y1-y2) <= int(floor(L/2)))
+    if (abs(y1-y2) <= ifloor(L/2))
         for j = y1+1:y2
             err[rem1(2*I+1, 2*L), j, 2] += 1
         end
@@ -239,17 +226,17 @@ function apply_y_error!(err, x1, y1, x2, y2)
     nothing
 end
 
-code = ToricCode(L)
-initialize_stabilizers!(code)
-initialize_logical_operators!(code)
+function initialize_code!(code::Code)
+    initialize_stabilizers!(code)
+    initialize_logical_operators!(code)
+    nothing
+end
 
-results = {}
+function run_simulation!(code::ToricCode, T::Integer, tries::Integer)
 
-stepsize = ceil(0.005*2*L*L)
-τ = 2*L*L
-
-function run_simulation(code::ToricCode, T::Integer)
+    L = code.L
     fail = 0
+
     for n = 1:tries
         if T == 0
             continue
@@ -258,7 +245,7 @@ function run_simulation(code::ToricCode, T::Integer)
         # clear previous try
         clear!(code)
 
-        for n = 1:T*stepsize
+        for n = 1:T
             apply_random_error!(code)
         end
 
@@ -301,17 +288,3 @@ function run_simulation(code::ToricCode, T::Integer)
     println("fail probability: ", fail/tries)
     fail/tries
 end
-
-T_max = min(30, int(ceil(0.15/(stepsize/τ))))
-
-for T = 0:T_max
-    push!(results, run_simulation(code, T))
-end
-
-println(0:stepsize/τ:T_max*stepsize/τ)
-println(results)
-
-df = DataFrame(time=0:stepsize/τ:T_max*stepsize/τ,
-                probability=results, L=L)
-
-writetable(filename, df)
