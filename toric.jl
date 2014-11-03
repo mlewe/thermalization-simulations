@@ -42,6 +42,47 @@ function apply_random_error!(T::ToricCode)
     nothing
 end
 
+function apply_thermal_error!(T::ToricCode)
+    L = T.L
+    error = reshape(T.E, (2*L, L, 2))
+    i, j, k, t  = rand(1:L), rand(1:L), rand(1:2), rand(1:2)
+    stabilizers = stabilizer(T, i, j, t) + stabilizer(T,
+        rem1(i + (t == 0 ? 1 : 0), L), rem1(i + (k != 0 ? 1 : 0), L), t)
+    prob = 0.0
+    if stabilizers == 0
+        println("creating two anyons, cost = 2J")
+    elseif stabilizers == 1
+        println("moving one anyon, cost = 0")
+        prob = 1
+    else
+        println("annihilating two anyons, cost = -2J")
+    end
+
+    nothing
+end
+
+function stabilizer(T::ToricCode, i, j, t)
+    L = T.L
+    error = reshape(T.E, (2*L, L, 2))
+    if t == 1
+        # plaquettes
+        return (
+            error[2*i, j, 1] +
+            error[2*i-1, j, 1] +
+            error[2*i, (j % L)+1, 1] +
+            error[((2*i) % (2*L))+1, j, 1]
+        ) % 2
+    else
+        # stars
+        return (
+            error[(2*i%(2*L))+1, j, 2] +
+            error[2*i, j%L+1, 2] +
+            error[(2*i%(2*L))+1, j%L+1, 2] +
+            error[((2*i+1)%(2*L))+1, j%L+1, 2]
+        ) % 2
+    end
+end
+
 function initialize_stabilizers!(T::ToricCode)
 
     L = T.L
