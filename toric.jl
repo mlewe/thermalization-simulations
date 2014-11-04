@@ -47,17 +47,36 @@ function apply_thermal_error!(T::ToricCode)
     error = reshape(T.E, (2*L, L, 2))
     i, j, k, t  = rand(1:L), rand(1:L), rand(1:2), rand(1:2)
     stabilizers = stabilizer(T, i, j, t) + stabilizer(T,
-        rem1(i + (t == 0 ? 1 : 0), L), rem1(i + (k != 0 ? 1 : 0), L), t)
+        rem1(i + (k == 1 ? 1 : 0), L), rem1(i + (k != 1 ? 1 : 0), L), t)
     prob = 0.0
+    ϵ = 0.3 # T/J
     if stabilizers == 0
         println("creating two anyons, cost = 2J")
+        prob = exp(-2/ϵ)
     elseif stabilizers == 1
         println("moving one anyon, cost = 0")
-        prob = 1
+        prob = ϵ*(1-exp(-2/ϵ))/2
     else
         println("annihilating two anyons, cost = -2J")
+        prob = 1.0
     end
-
+    println(prob)
+    if rand() <= prob
+        println("accepting the error")
+        if t == 1
+            if k == 1
+                error[((2*i) % (2*L))+1, j, 1] += 1
+            else
+                error[2*i, (j % L)+1, 1] += 1
+            end
+        else
+            if k == 1
+                error[((2*i+1)%(2*L))+1, j%L+1, 2] += 1
+            else
+                error[(2*i%(2*L))+1, j%L+1, 2] += 1
+            end
+        end
+    end
     nothing
 end
 
