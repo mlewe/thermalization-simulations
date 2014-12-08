@@ -2,19 +2,30 @@ using BlossomV
 
 abstract Code
 
+type Point{T}
+    x::T
+    y::T
+end
+
 type ToricCode <: Code
     L::Int64
     S::Matrix{Uint8}
     LO::Matrix{Uint8}
     E::Vector{Uint8}
     V::Vector{Uint8}
+    locations::Matrix{Uint}
+    positions::Vector{Point{Uint}}
+    slices::Vector{Uint}
 end
 
 ToricCode(L::Integer) = ToricCode(L,
     zeros(Uint8, (2*L*L, 2*2*L*L)),
     zeros(Uint8, (4, 2*2*L*L)),
-    zeros(Uint8, (2*2*L*L,)),
-    zeros(Uint8, (2*L*L)))
+    Array(Uint8, (2*2*L*L,)),
+    Array(Uint8, (2*L*L)),
+    Array(Uint, (2*L, L)),
+    Array(Point{Uint}, (2*L*L)),
+    Array(Uint, 8))
 
 function torus_distance(l, L)
     min(l, L-l)
@@ -135,6 +146,28 @@ function initialize_logical_operators!(T::ToricCode)
         logical_operators[2, 2*i, 1, 1] = 1
         logical_operators[3, 1, i, 1] = 1
         logical_operators[4, 2*i, 1, 2] = 1
+    end
+
+    nothing
+end
+
+function initialize_nfold!(code::Code)
+    L = code.L
+    _positions = reshape(code.positions, (2*L, L))
+    locations = code.locations
+
+    k::Uint = 0
+    for i::Uint = 1:2*L
+        for j::Uint = 1:L
+            k += 1
+            locations[i, j] = k
+            _positions[i, j] = Point(i, j)
+        end
+    end
+
+    code.slices[1] = 1
+    for i = 2:8
+        code.slices[i] = 2*L*L
     end
 
     nothing
@@ -305,6 +338,7 @@ function run_simulation!(code::ToricCode, T::Integer, tries::Integer)
 
         # clear previous try
         clear!(code)
+        initialize_nfold!(code)
 
         for n = 1:T
             apply_random_error!(code)
