@@ -13,8 +13,8 @@ type ToricCode <: Code
     LO::Matrix{Uint8}
     E::Vector{Uint8}
     V::Vector{Uint8}
-    locations::Matrix{Uint}
-    positions::Vector{Point{Uint}}
+    lookup::Matrix{Uint}
+    locations::Vector{Point{Uint}}
     slices::Vector{Uint}
 end
 
@@ -57,8 +57,10 @@ function apply_thermal_error!(T::ToricCode)
     L = T.L
     error = reshape(T.E, (2*L, L, 2))
     i, j, k, t  = rand(1:L), rand(1:L), rand(1:2), rand(1:2)
-    stabilizers = stabilizer(T, i, j, t) + stabilizer(T,
-        rem1(i + (k == 1 ? 1 : 0), L), rem1(i + (k != 1 ? 1 : 0), L), t)
+
+    stabilizer1 = stabilizer(T, i, j, t)
+    stabilizer2 = stabilizer(T, rem1(i + (k == 1 ? 1 : 0), L), rem1(i + (k != 1 ? 1 : 0), L), t)
+    stabilizers = stabilizer1 + stabilizer2
     prob = 0.0
     ϵ = 0.3 # T/J
     if stabilizers == 0
@@ -89,6 +91,22 @@ function apply_thermal_error!(T::ToricCode)
         end
     end
     nothing
+end
+
+function apply_error_and_update_slices!(T::ToricCode, i::Uint64, j::Uint64, t::Uint64)
+    L = T.L
+    k = code.lookup[i, j]
+
+    nothing
+end
+
+function get_class(T::ToricCode, k)
+    for i = 1:8
+        if T.slices[i] >= k
+            return i
+        end
+    end
+    9
 end
 
 function stabilizer(T::ToricCode, i, j, t)
@@ -153,20 +171,20 @@ end
 
 function initialize_nfold!(code::Code)
     L = code.L
-    _positions = reshape(code.positions, (2*L, L))
     locations = code.locations
+    lookup = code.lookup
 
     k::Uint = 0
     for i::Uint = 1:2*L
         for j::Uint = 1:L
             k += 1
-            locations[i, j] = k
-            _positions[i, j] = Point(i, j)
+            lookup[i, j] = k
+            locations[k] = Point(i, j)
         end
     end
 
     code.slices[1] = 1
-    for i = 2:8
+    for i = 1:8
         code.slices[i] = 2*L*L
     end
 
